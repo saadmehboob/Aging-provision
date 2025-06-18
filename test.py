@@ -1,179 +1,178 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import io
+import re
 
-# Page config
 st.set_page_config(page_title="Aging Provision Dashboard", layout="wide")
+st.title("📦 Aging Provision Streamlit App")
 
-# Title
-st.title("📊 Aging Provision Policy Dashboard")
-st.markdown("""
-This dashboard summarizes the financial provision policy applied to inventory buckets based on location and brand status.
+st.sidebar.header("📌 Parameters")
+first_first_bucket_number_seasons = st.sidebar.slider("Seasons in Bucket 1", 1, 10, 5)
+damage_percentage = st.sidebar.slider("Damage Provision %", 0.0, 1.0, 1.0)
+leftover_running_percentage = st.sidebar.slider("Leftover Running Brand %", 0.0, 1.0, 0.15)
+leftover_closed_percentage = st.sidebar.slider("Leftover Closed Brand %", 0.0, 1.0, 0.50)
+closed_percentage = st.sidebar.slider("Closed Brands %", 0.0, 1.0, 0.50)
 
-### Provision Calculation Logic:
-- **Damage**: 100% of net cost
-- **Leftover - Closed Brands**: 50%
-- **Leftover - Running Brands**: 15%
-- **Closed Brands (Other)**: 50%
-- **Exclusions**: Consignment / Guaranteed Margin / Buying Pull - Mango → 0%
-""")
-
-# Load brand list for override UI
-#@st.cache_data
-def get_brand_list():
-    df = pd.read_excel("Output/aging_provision_combinations.xlsx")
-    return sorted(df['Std Brand'].dropna().unique().tolist())
-
-brand_list = get_brand_list()
-
-# Sidebar - Category-level provision sliders
-st.sidebar.header("Provision Parameters")
-damage_percentage = st.sidebar.slider("Damage %", 0.0, 1.0, 1.0)
-leftover_closed_percentage = st.sidebar.slider("Leftover (Closed Brand) %", 0.0, 1.0, 0.5)
-leftover_running_percentage = st.sidebar.slider("Leftover (Running Brand) %", 0.0, 1.0, 0.15)
-closed_brand_percentage = st.sidebar.slider("Closed Brand (Other Locations) %", 0.0, 1.0, 0.5)
-
-# Sidebar - Brand-level override UI
-st.sidebar.header("Brand-Level Overrides")
-selected_brands = st.sidebar.multiselect("Select Brands to Override", brand_list)
-brand_override = {}
-for brand in selected_brands:
-    pct = st.sidebar.slider(f"{brand} Override %", 0.0, 1.0, 0.5, key=brand)
-    brand_override[brand] = pct
-
-# Load and process data
-#@st.cache_data
-def load_data(damage_pct, leftover_closed_pct, leftover_running_pct, closed_brand_pct, brand_override=None):
-    df = pd.read_excel("Output/aging_provision_combinations.xlsx")
-    df['provision_amount_policy'] = df['provision_amount_policy'].fillna(0)
-    df['additional_provision'] = 0
-    df['Total Provision'] = df['Total Provision'].fillna(0)
-
-    # Damage
-    damage = df['location_catergory'] == 'Damage'
-    df.loc[damage, 'additional_provision'] = (df.loc[damage, 'NETTOTAL_COST'] * damage_pct) - df.loc[damage, 'provision_amount_policy']
-
-    # Leftover
-    leftover_closed = (df['Closed_status'].fillna('') == 'Closed') & (df['location_catergory'] == 'Leftover')
-    df.loc[leftover_closed, 'additional_provision'] = (df.loc[leftover_closed, 'NETTOTAL_COST'] * leftover_closed_pct) - df.loc[leftover_closed, 'provision_amount_policy']
-
-    leftover_running = (df['Closed_status'].fillna('') != 'Closed') & (df['location_catergory'] == 'Leftover')
-    df.loc[leftover_running, 'additional_provision'] = (df.loc[leftover_running, 'NETTOTAL_COST'] * leftover_running_pct) - df.loc[leftover_running, 'provision_amount_policy']
-
-    # Closed brands other
-    closed_other = (df['Closed_status'].fillna('') == 'Closed') & (~df['location_catergory'].isin(['Leftover', 'Damage']))
-    df.loc[closed_other, 'additional_provision'] = (df.loc[closed_other, 'NETTOTAL_COST'] * closed_brand_pct) - df.loc[closed_other, 'provision_amount_policy']
-
-    # Exclusions
-    df.loc[df['Model'].isin(['Consignment', 'Guaranteed Margin', 'Buying Pull - Mango']),
-           ['provision_amount_policy', 'additional_provision']] = 0
-
-    # Apply brand-level override
-    if brand_override:
-        for brand, override_pct in brand_override.items():
-            mask = df['Std Brand'] == brand
-            df.loc[mask, 'additional_provision'] = (df.loc[mask, 'NETTOTAL_COST'] * override_pct) - df.loc[mask, 'provision_amount_policy']
-
-    df['Total Provision'] = df['provision_amount_policy'] + df['additional_provision']
-    return df
-
-# Load data
-soh = load_data(
-    damage_pct=damage_percentage,
-    leftover_closed_pct=leftover_closed_percentage,
-    leftover_running_pct=leftover_running_percentage,
-    closed_brand_pct=closed_brand_percentage,
-    brand_override=brand_override
-)
-
-# Summary table
-summary = soh.groupby("Std Brand")[['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']].sum()
-summary['coverage'] = summary['Total Provision'] / summary['NETTOTAL_COST']
-summary = summary.fillna(0)
-
-def format_summary(df):
-    df = df.copy()
-    for col in ['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']:
-        if col not in df.columns:
-            df[col] = 0
-    if 'coverage' not in df.columns:
-        df['coverage'] = 0
-    df[['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']] = df[
-        ['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']
-    ].fillna(0).round(0).astype(int)
-    df['coverage'] = df['coverage'].fillna(0).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "0%")
-    return df
-
-# Tabs
-tab1, tab2, tab3 = st.tabs(["Summary", "Category Analysis", "Graphs"])
-
-with tab1:
-    st.subheader("Total Summary by Brand")
-    st.dataframe(format_summary(summary))
-
-    # Grand Totals
-    grand = summary[['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']].sum()
-    grand['coverage'] = f"{(grand['Total Provision'] / grand['NETTOTAL_COST']):.0%}" if grand['NETTOTAL_COST'] else "0%"
-    st.markdown("**Grand Totals:**")
-    st.write(grand.to_frame().T)
-
-    # Export button
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        soh.to_excel(writer, index=False, sheet_name='Base Table')
-        summary.to_excel(writer, sheet_name='Summary')
-
-    # 🔥 This line is essential
-    buffer.seek(0)
-
-    st.download_button(
-        label="📥 Download Provision Data",
-        data=buffer,
-        file_name="provision_analysis.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+brand_input = st.sidebar.text_area("Brand Specific Provision\nFormat: BRAND=0.5,BRAND2=0.2")
+brand_specific_provision = {}
+if brand_input:
+    try:
+        for item in brand_input.split(','):
+            k, v = item.split('=')
+            brand_specific_provision[k.strip().upper()] = float(v)
+    except:
+        st.sidebar.warning("Invalid brand override format.")
 
 
-with tab2:
-    st.subheader("Category-Based Summary")
-    col1, col2, col3 = st.columns(3)
+tabs = st.tabs(["Brand Summary", "Checks", "Category Analysis", "Diff Entry"])
 
-    with col1:
-        dmg = soh[soh['location_catergory'] == 'Damage'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
-        dmg['coverage'] = dmg['Total Provision'] / dmg['NETTOTAL_COST']
-        st.metric("Damage Avg Coverage", f"{dmg['coverage'].mean():.0%}")
-        st.dataframe(format_summary(dmg))
+# ---- File Upload ----
+with tabs[0]:
+    st.header("Upload SOH File")
+    soh_file = st.file_uploader("Upload SOH Report", type=["xlsx"])
 
-    with col2:
-        lft = soh[soh['location_catergory'] == 'Leftover'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
-        lft['coverage'] = lft['Total Provision'] / lft['NETTOTAL_COST']
-        st.metric("Leftover Avg Coverage", f"{lft['coverage'].mean():.0%}")
-        st.dataframe(format_summary(lft))
+if soh_file:
+    # --- Load Files ---
+    soh = pd.read_excel(soh_file, sheet_name='Sheet1')
+    soh = soh[(soh['GROUP_NAME'] != 'Aleph') & (soh['AR Comments'] == 'Consider')]
+    soh['NETTOTAL_COST'].fillna(0, inplace=True)
+    soh['NETTOTAL_COST'] = pd.to_numeric(soh['NETTOTAL_COST'], errors='coerce')
 
-    with col3:
-        cls = soh[soh['Closed_status'].fillna('') == 'Closed'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
-        cls['coverage'] = cls['Total Provision'] / cls['NETTOTAL_COST']
-        st.metric("Closed Brand Avg Coverage", f"{cls['coverage'].mean():.0%}")
-        st.dataframe(format_summary(cls))
+    original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh.columns else 'SEASON DESC'
 
-with tab3:
-    st.subheader("Graphs")
-    fig, ax = plt.subplots(figsize=(12, 5))
-    top = summary.sort_values('Total Provision', ascending=False).head(10)
-    ax.bar(top.index, top['NETTOTAL_COST'], label='Net Cost', alpha=0.6)
-    ax.bar(top.index, top['Total Provision'], label='Total Provision', alpha=0.9)
-    ax.set_title("Top 10 Brands by Provision")
-    ax.set_ylabel("SAR")
-    ax.legend()
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+    def season_sort_key(season):
+        if not isinstance(season, str) or len(season) < 4:
+            return (0, 0)
+        season_type = season[:2]
+        year = int(season[-2:])
+        season_rank = 1 if season_type == "AW" else 0
+        return (year, season_rank)
 
-    st.subheader("Coverage Ratio Distribution")
-    fig2, ax2 = plt.subplots()
-    sns.histplot(summary['coverage'].astype(float), bins=10, kde=True, ax=ax2)
-    ax2.set_title("Coverage Distribution")
-    ax2.set_xlabel("Coverage Ratio")
-    st.pyplot(fig2)
+    def standardize_season(raw_season):
+        if not isinstance(raw_season, str) or raw_season.strip() == "":
+            return "Unknown"
+        season = raw_season.strip().upper()
+        if "CONTINUITY" in season or "BASICS" in season:
+            return "Continuity"
+        elif "OLD" in season:
+            return "Old-"
+        year_match = re.search(r"(20\d{2})", season)
+        if year_match:
+            year = year_match.group(1)[2:]
+            if any(tag in season for tag in ["SPRING", "SUMMER", "SS"]):
+                return f"SS{year}"
+            elif any(tag in season for tag in ["AUTUMN", "WINTER", "AW"]):
+                return f"AW{year}"
+        match = re.search(r"(SS|AW)(\d{2})", season)
+        if match:
+            return f"{match.group(1)}{match.group(2)}"
+        match = re.search(r"WA(\d{2})", season)
+        if match:
+            return f"AW{match.group(1)}"
+        match = re.search(r"(\d{2})", season)
+        if match:
+            return f"SS{match.group(1)}"
+        return "Unknown"
+
+    soh['std_season'] = soh[original_season].apply(standardize_season)
+    excluded = {'Unknown', 'Continuity', 'Old-', 'AW97'}
+    unique_season = [f for f in soh['std_season'].dropna().unique() if f not in excluded]
+    sorted_std_season = sorted(unique_season, key=season_sort_key, reverse=True)
+
+    bucket1 = sorted_std_season[:first_first_bucket_number_seasons] + ['Unknown', 'Continuity']
+    bucket2 = sorted_std_season[first_first_bucket_number_seasons:first_first_bucket_number_seasons + 3]
+    bucket3 = sorted_std_season[first_first_bucket_number_seasons + 3:first_first_bucket_number_seasons + 6]
+    bucket4 = sorted_std_season[first_first_bucket_number_seasons + 6:] + ['Old-', 'AW97']
+
+    soh['season_bucket'] = np.select(
+        [soh['std_season'].isin(bucket1), soh['std_season'].isin(bucket2), soh['std_season'].isin(bucket3)],
+        ['bucket1', 'bucket2', 'bucket3'],
+        default='bucket4')
+
+    soh['Continuity_factor'] = 0.40
+    soh['provision_%_policy'] = soh['season_bucket'].map({
+        'bucket1': 0,
+        'bucket2': leftover_running_percentage,
+        'bucket3': leftover_closed_percentage,
+        'bucket4': closed_percentage
+    })
+
+    soh.loc[soh['Model'].isin(['Consignment', 'Guaranteed Margin', 'Buying Pull - Mango']),
+            ['provision_amount_policy', 'provision_%_policy', 'Continuity_factor']] = 0
+    soh['provision_amount_policy'] = soh['NETTOTAL_COST'] * soh['provision_%_policy'] * soh['Continuity_factor']
+
+    soh['location_catergory'] = "Store, Online & WH"
+    soh.loc[soh['LOCATION_NAME'].astype(str).str.lower().str.contains('leftover', na=False), "location_catergory"] = "Leftover"
+    soh.loc[soh['LOCATION_NAME'].astype(str).str.lower().str.contains('damage', na=False), "location_catergory"] = "Damage"
+    soh.loc[soh['LOCATION_NAME'].astype(str).str.lower().str.contains('sulay', na=False), "location_catergory"] = "Leftover"
+
+    soh['additional_provision'] = 0.0
+    soh.loc[soh['location_catergory'] == "Damage", 'additional_provision'] = soh["NETTOTAL_COST"] * damage_percentage - soh['provision_amount_policy']
+
+    soh.loc[(soh['Closed_status'] == "Closed") & (soh['location_catergory'] == "Leftover"),
+            'additional_provision'] = soh["NETTOTAL_COST"] * leftover_closed_percentage - soh['provision_amount_policy']
+
+    soh.loc[(soh['Closed_status'] != "Closed") & (soh['location_catergory'] == "Leftover"),
+            'additional_provision'] = soh["NETTOTAL_COST"] * leftover_running_percentage - soh['provision_amount_policy']
+
+    soh.loc[(soh['Closed_status'] == "Closed") & (~soh['location_catergory'].isin(["Leftover", "Damage"])),
+            'additional_provision'] = soh["NETTOTAL_COST"] * closed_percentage - soh['provision_amount_policy']
+
+    if brand_specific_provision:
+        soh['additional_provision'] = np.where(
+            soh['Std Brand'].isin(brand_specific_provision.keys()),
+            soh['NETTOTAL_COST'] * soh['Std Brand'].map(brand_specific_provision) - soh['provision_amount_policy'],
+            soh['additional_provision']
+        )
+
+    soh['provision_amount_policy'].fillna(0, inplace=True)
+    soh['additional_provision'].fillna(0, inplace=True)
+    soh['Total Provision'] = soh['provision_amount_policy'] + soh['additional_provision']
+
+    with tabs[0]:
+        st.header("📊 Brand Summary")
+        summary = soh.groupby('Std Brand')[['NETTOTAL_COST', 'provision_amount_policy', 'additional_provision', 'Total Provision']].sum()
+        summary['coverage'] = summary['Total Provision'] / summary['NETTOTAL_COST']
+        st.dataframe(summary)
+
+        st.download_button("Download Detailed Provision", soh.to_csv(index=False).encode(), "provision_detail.csv")
+
+    with tabs[1]:
+        st.header("🔍 Checks")
+        st.subheader("Buckets Preview")
+        st.write(pd.DataFrame({'bucket1': bucket1, 'bucket2': bucket2, 'bucket3': bucket3, 'bucket4': bucket4}))
+
+        st.subheader("Seasons Preview")
+        st.write(soh[[original_season, 'std_season']].drop_duplicates())
+
+    with tabs[2]:
+        st.header("📈 Category-wise Analysis")
+        for category in ['Damage', 'Leftover', 'Closed']:
+            st.subheader(f"{category} Category")
+            if category == 'Closed':
+                df = soh[soh['Closed_status'] == 'Closed']
+            else:
+                df = soh[soh['location_catergory'] == category]
+            group = df.groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
+            group['coverage'] = group['Total Provision'] / group['NETTOTAL_COST']
+            st.dataframe(group)
+
+    with tabs[3]:
+        st.header("📥 Upload Current Balances")
+        balance_file = st.file_uploader("Upload Balance File", type=['xlsx'])
+        if balance_file:
+            existing_balances = pd.read_excel(balance_file)
+            s1_cols = ['s1', 's2', 's3', 's4']
+            soh[s1_cols] = 0  # Add fake combination data here or update based on your logic
+
+            merged = soh.groupby(s1_cols)['Total Provision'].sum().reset_index().merge(
+                existing_balances, on=s1_cols, how='outer').fillna(0)
+            merged['Dr/(CR)'] = (merged['Total Provision'] + merged['Closing balance']) * -1
+            merged['s5'] = 23993
+
+            merged2 = merged.copy()
+            merged2['Dr/(CR)'] *= -1
+            merged2['s5'] = 63002
+            diff_entry = pd.concat([merged, merged2], ignore_index=True)
+            st.dataframe(diff_entry)
+            st.download_button("Download Diff Entry", diff_entry.to_csv(index=False).encode(), "diff_entry.csv")
