@@ -118,6 +118,7 @@ soh = pd.read_excel(fr"SOH/{SOH_File}", sheet_name='Sheet1')
 soh = soh[(soh['GROUP_NAME'] != 'Aleph' )& (soh['AR Comments'] == 'Consider')]
 existing_balances = pd.read_excel(r'Existing Balances/current_balance.xlsx', sheet_name='Sheet1')
 mapping = pd.read_excel(r'Mapping & Combinations/mapping.xlsx', sheet_name='Sheet1')
+
 soh['NETTOTAL_COST'].fillna(0, inplace=True)
 soh['NETTOTAL_COST'] = pd.to_numeric(soh['NETTOTAL_COST'], errors='coerce')
 
@@ -127,6 +128,7 @@ soh['NETTOTAL_COST'].sum()
 
 # %%
 combinations = pd.read_excel(r'Mapping & Combinations/combinations.xlsx', sheet_name='Sheet1')
+combinations = combinations.groupby(['LOCATION','Std Brand']).first().reset_index()
 
 # %%
 soh['GROUP_NAME'] = soh['GROUP_NAME'].str.upper()
@@ -380,40 +382,50 @@ closed_summary
 
 # %%
 # verify the original seasons in the std buckets 
-check_buckets = soh[['season_bucket','std_season' ]].drop_duplicates()
+check_buckets = soh[['season_bucket','std_season' ]].drop_duplicates().sort_values(by='season_bucket', ascending=True)
 
 # %%
 # verify the seasons in the correct buckets 
-check_season = soh[['std_season', original_season]].drop_duplicates()
+check_season = soh[['std_season', original_season]].drop_duplicates().sort_values(by='std_season', ascending=True)
 
 # %%
 #missing combinations in output
 missing_combinations = soh_with_combinations[(soh_with_combinations['NETTOTAL_COST'] != 0)&(soh_with_combinations['s1'].isna())] 
 
 # %%
-# 1. Check for missing values in key columns
-missing_in_soh = soh[soh[['Std Brand', 'LOCATION_NAME', 'NETTOTAL_COST', 'std_season']].isnull().any(axis=1)]
-print("Missing values in SOH key columns:", missing_in_soh.shape[0])
+# Check for missing values in key columns
+missing_in_std_brand = soh[soh['Std Brand'].isnull()]
+print("Net cost of missing std_brand :", missing_in_std_brand['NETTOTAL_COST'].sum())
 
 
-# 3. Check for duplicates in mapping [original brand name]
+
+# %%
+# Check for duplicates in mapping [original brand name]
 duplicates_mapping = mapping.duplicated(subset=['GROUP_NAME'], keep=False)
 print("Duplicate original brand names in mapping:", mapping[duplicates_mapping].shape[0])
 
-# 4. Check for missing standard brands in mapping and SOH
-missing_std_brands_in_mapping = set(soh['Std Brand']) - set(mapping['Std Brand'])
-print("Std Brands in SOH missing from mapping:", missing_std_brands_in_mapping)
-
+# %%
 missing_std_brands_in_soh = set(mapping['Std Brand']) - set(soh['Std Brand'])
-print("Std Brands in mapping missing from SOH:", missing_std_brands_in_soh)
+print("Std Brands in mapping missing in SOH:", missing_std_brands_in_soh)
 
-# 5. Check for garbage/unknown seasons in std_season
-garbage_seasons = soh[soh['std_season'].isin(['Unknown', 'Old-', 'AW97'])]
-print("Rows with garbage/unknown std_season:", garbage_seasons.shape[0])
 
-# 6. Check for missing in combinations merge
-missing_comb_rows = soh_with_combinations[soh_with_combinations['s1'].isnull()]
-print("Rows missing combination mapping:", missing_comb_rows.shape[0])
+# %%
+# Check for garbage/unknown seasons in std_season
+garbage_seasons = soh[(soh['std_season'] == "Unknown")&(~soh['Model'].isin([
+        'Consignment',
+        'Guaranteed Margin',
+        'Buying Pull - Mango'
+    ]))]
+print("Cost of unknown std_season:", f"{garbage_seasons['NETTOTAL_COST'].sum():,.2f}")
+
+# %%
+
+
+
+
+# Check for missing in combinations merge
+missing_comb_rows = soh_with_combinations[soh_with_combinations['s4'] == 0]
+print("Cost with combination mapping:", f"{missing_comb_rows['NETTOTAL_COST'].sum():,.2f}")
 
 
 # %%
@@ -432,5 +444,6 @@ entry_check = existing_balances.iloc[:,-1].sum()+ diff_entry[diff_entry['s5']==2
 print(f"{entry_check=:,.2f}")
 
 # %%
+
 
 
