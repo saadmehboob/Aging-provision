@@ -205,12 +205,13 @@ def get_analysis(soh_with_combinations: pd.DataFrame= pd.read_excel(os.path.join
     missing_std_brands_in_soh = set(mapping['Std Brand']) - set(soh_with_combinations['Std Brand'])
     #print("Std Brands in mapping missing in SOH:", missing_std_brands_in_soh)
     # Check for garbage/unknown seasons in std_season
-    garbage_seasons = soh_with_combinations[(soh_with_combinations['std_season'] == "Unknown")&(~soh_with_combinations['Model'].isin([
+    no_seasons = soh_with_combinations[(soh_with_combinations['std_season'] == "Unknown")&(~soh_with_combinations['Model'].isin([
             'Consignment',
             'Guaranteed Margin',
             'Buying Pull - Mango'
-        ]))]
-    print("Cost of unknown std_season:", f"{garbage_seasons['NETTOTAL_COST'].sum():,.2f}")
+        ]))].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
+    no_seasons['coverage'] = no_seasons['Total Provision'] / no_seasons['NETTOTAL_COST']
+    #print("Cost of unknown std_season:", f"{garbage_seasons['NETTOTAL_COST'].sum():,.2f}")
     # Check for missing in combinations merge
     missing_comb_rows = soh_with_combinations[soh_with_combinations['s4'] == 0]['NETTOTAL_COST'].sum()
     #print("Cost with combination mapping:", f"{missing_comb_rows['NETTOTAL_COST'].sum():,.2f}")
@@ -222,6 +223,7 @@ def get_analysis(soh_with_combinations: pd.DataFrame= pd.read_excel(os.path.join
     "closed_summary": closed_summary,
     "check_buckets": check_buckets,
     "check_season": check_season,
+    "no_seasons": no_seasons,
     "missing_combinations": missing_combinations,
     "missing_in_std_brand": missing_in_std_brand,
     "duplicates_mapping": duplicates_mapping,

@@ -125,7 +125,7 @@ with tab2:
         render_summary_with_metrics("Damage Stock Summary", analysis["damage_summary"])
         render_summary_with_metrics("Leftover Stock Summary", analysis["leftover_summary"])
         render_summary_with_metrics("Closed Brand Summary", analysis["closed_summary"])
-
+        render_summary_with_metrics("Unknown Season Summary", analysis["no_seasons"])
 
         
         col1, col2= st.columns([1, 1])
@@ -142,14 +142,14 @@ with tab2:
         st.metric("Missing brand in Standard Brand", f"{analysis['missing_in_std_brand']:,.2f}")
 
         st.subheader("")
-        st.metric( "Duplicates in mapping file",value=f"{analysis["duplicates_mapping"]:,.2f}")
+        st.metric("Duplicates in mapping file",value=f"{analysis["duplicates_mapping"]:,.2f}")
 
         st.subheader("Brands not in the working file")
         st.dataframe(pd.DataFrame(analysis["missing_std_brands_in_soh"]))
 
 
         st.subheader("")
-        st.metric( "Missing Combinations",value=f"{analysis["missing_comb_rows"]:,.2f}")      
+        st.metric( "Total SOH cost with missing combinations",value=f"{analysis["missing_comb_rows"]:,.2f}")      
 
 
     else:
