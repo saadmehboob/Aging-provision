@@ -5,7 +5,13 @@ import io
 import os
 
 st.set_page_config(page_title="Inventory Aging Provision Dashboard", layout="wide")
+
+
 st.title("📦 Inventory Aging Provision Dashboard")
+PASSWORD = os.getenv("APP_PASSWORD")
+
+if st.text_input("🔐 Enter password:", type="password") != PASSWORD:
+    st.stop()
 os.makedirs("Output", exist_ok=True)
 brand_specific_provision = {}
 DEFAULT_COMBINATIONS_PATH = "Mapping & Combinations/combinations.xlsx"
@@ -149,13 +155,13 @@ with tab2:
         st.metric("Total SOH cost with missing standard Brand", f"{analysis['missing_in_std_brand']:,.2f}")
 
         st.subheader("")
-        st.metric("Duplicates in mapping file",value=f"{analysis["duplicates_mapping"]:,.2f}")
+        st.metric("Duplicates in mapping file",value=f"{analysis['duplicates_mapping']:,.2f}")
 
 
 
 
         st.subheader("")
-        st.metric( "Total SOH cost with missing combinations",value=f"{analysis["missing_comb_rows"]:,.2f}")      
+        st.metric( "Total SOH cost with missing combinations",value=f"{analysis['missing_comb_rows']:,.2f}")      
 
 
     else:

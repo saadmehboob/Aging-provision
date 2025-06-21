@@ -1,0 +1,3 @@
+# flyctl launch added from .gitignore
+**\__pycache__\my_funct.cpython-312.pyc
+fly.toml
