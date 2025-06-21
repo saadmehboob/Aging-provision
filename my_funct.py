@@ -55,8 +55,8 @@ def run_aging_provision_pipeline(
     soh = pd.read_excel(soh_path)
     soh = soh[(soh['GROUP_NAME'] != 'Aleph') & (soh['AR Comments'] == 'Consider')]
     
-    mapping = pd.read_excel(r'Mapping & Combinations/mapping.xlsx', sheet_name='Sheet1')
-    combinations = combinations = pd.read_excel(r'Mapping & Combinations/combinations.xlsx', sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
+    mapping = pd.read_excel(os.path.join('Mapping & Combinations','mapping.xlsx'), sheet_name='Sheet1')
+    combinations = combinations = pd.read_excel(os.path.join('Mapping & Combinations','combinations.xlsx'), sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
 
     soh['NETTOTAL_COST'].fillna(0, inplace=True)
     soh['NETTOTAL_COST'] = pd.to_numeric(soh['NETTOTAL_COST'], errors='coerce')
@@ -158,7 +158,7 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
     completed_entry.rename(columns={'Total Provision': 'Dr/(CR)'}, inplace=True)
     completed_entry = completed_entry[completed_entry['Dr/(CR)'] != 0]
     completed_entry = completed_entry[['s1', 's2', 's3', 's4', 's5','Dr/(CR)']]
-    completed_entry.to_csv(r"Output/completed_entry.csv", index=False)
+    completed_entry.to_csv(os.path.join("Output","completed_entry.csv"), index=False)
 
     diff_table = soh_with_combinations.groupby(["s1","s2","s3","s4"])['Total Provision'].sum().reset_index().fillna(0).merge(existing_balances, on=['s1','s2','s3','s4'], how='outer').fillna(0)
     diff_table['Dr/(CR)'] = (diff_table['Total Provision'] + diff_table['Closing balance'])*-1
@@ -171,13 +171,13 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
     #diff_entry.rename(columns={'Total Provision': 'Dr/(CR)'}, inplace=True)
     diff_entry = diff_entry[diff_entry['Dr/(CR)'] != 0]
     diff_entry = diff_entry[['s1', 's2', 's3', 's4', 's5','Dr/(CR)']]
-    diff_entry.to_csv(r"Output/diff_entry.csv", index=False)
+    diff_entry.to_csv(os.path.join("Output","diff_entry.csv"), index=False)
 
     return completed_entry, diff_entry, existing_balances
 
 def get_analysis(soh_with_combinations: pd.DataFrame):
     original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh_with_combinations.columns else 'SEASON DESC'
-    mapping = pd.read_excel(r'Mapping & Combinations/mapping.xlsx', sheet_name='Sheet1')
+    mapping = pd.read_excel(os.path.join('Mapping & Combinations',"completed_entry.csv"), sheet_name='Sheet1')
     
     damage_summary = soh_with_combinations[soh_with_combinations['location_catergory'] == 'Damage'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
     damage_summary['coverage'] = damage_summary['Total Provision'] / damage_summary['NETTOTAL_COST']
