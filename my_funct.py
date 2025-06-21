@@ -145,7 +145,7 @@ def run_aging_provision_pipeline(
         "soh_comb": soh_comb,
     }
 
-def get_GL_entry(soh_with_combinations: pd.DataFrame= pd.read_excel(os.path.join("Output", "aging_provision_combinations.xlsx")), 
+def get_GL_entry(soh_with_combinations: pd.DataFrame, 
                  existing_balances: pd.DataFrame = pd.read_excel(r'Existing Balances/current_balance.xlsx', sheet_name='Sheet1')):
     
     entry = soh_with_combinations.groupby(["s1","s2","s3","s4"])['Total Provision'].sum().reset_index().fillna(0)
@@ -175,7 +175,7 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame= pd.read_excel(os.path.join
 
     return completed_entry, diff_entry, existing_balances
 
-def get_analysis(soh_with_combinations: pd.DataFrame= pd.read_excel(os.path.join("Output", "aging_provision_combinations.xlsx"))):
+def get_analysis(soh_with_combinations: pd.DataFrame):
     original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh_with_combinations.columns else 'SEASON DESC'
     mapping = pd.read_excel(r'Mapping & Combinations/mapping.xlsx', sheet_name='Sheet1')
     
