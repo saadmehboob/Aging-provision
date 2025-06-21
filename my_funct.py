@@ -146,7 +146,7 @@ def run_aging_provision_pipeline(
     }
 
 def get_GL_entry(soh_with_combinations: pd.DataFrame, 
-                 existing_balances: pd.DataFrame = pd.read_excel(r'Existing Balances/current_balance.xlsx', sheet_name='Sheet1')):
+                 existing_balances: pd.DataFrame):
     
     entry = soh_with_combinations.groupby(["s1","s2","s3","s4"])['Total Provision'].sum().reset_index().fillna(0)
     entry['s5'] = 63002
