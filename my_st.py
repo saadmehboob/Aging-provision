@@ -24,7 +24,7 @@ with tab1:
 
     if soh_file:
         try:
-            df_preview = pd.read_excel(DEFAULT_COMBINATIONS_PATH)
+            df_preview = pd.read_excel(os.path.join('mapping_combinations', 'combinations.xlsx'), nrows=55)
             if 'Std Brand' in df_preview.columns:
                 unique_brands = sorted(df_preview['Std Brand'].dropna().unique().astype(str).tolist())
         except Exception as e:
