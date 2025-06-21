@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 from my_funct import run_aging_provision_pipeline, get_GL_entry, get_analysis
 import io
+import os
 
 st.set_page_config(page_title="Inventory Aging Provision Dashboard", layout="wide")
 st.title("📦 Inventory Aging Provision Dashboard")
-
+os.makedirs("Output", exist_ok=True)
 brand_specific_provision = {}
 DEFAULT_COMBINATIONS_PATH = "Mapping & Combinations/combinations.xlsx"
 
