@@ -55,8 +55,8 @@ def run_aging_provision_pipeline(
     soh = pd.read_excel(soh_path)
     soh = soh[(soh['GROUP_NAME'] != 'Aleph') & (soh['AR Comments'] == 'Consider')]
     
-    mapping = pd.read_excel(os.path.join('mapping_combinations','mapping.xlsx'), sheet_name='Sheet1')
-    combinations = combinations = pd.read_excel(os.path.join('mapping_combinations','combinations.xlsx'), sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
+    mapping = pd.read_excel('mapping.xlsx', sheet_name='Sheet1')
+    combinations = combinations = pd.read_excel('combinations.xlsx', sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
 
     soh['NETTOTAL_COST'].fillna(0, inplace=True)
     soh['NETTOTAL_COST'] = pd.to_numeric(soh['NETTOTAL_COST'], errors='coerce')
@@ -177,7 +177,7 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
 
 def get_analysis(soh_with_combinations: pd.DataFrame):
     original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh_with_combinations.columns else 'SEASON DESC'
-    mapping = pd.read_excel(os.path.join('mapping_combinations',"completed_entry.csv"), sheet_name='Sheet1')
+    mapping = pd.read_excel("completed_entry.csv", sheet_name='Sheet1')
     
     damage_summary = soh_with_combinations[soh_with_combinations['location_catergory'] == 'Damage'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
     damage_summary['coverage'] = damage_summary['Total Provision'] / damage_summary['NETTOTAL_COST']
