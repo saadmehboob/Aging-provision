@@ -178,7 +178,7 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
 
 def get_analysis(soh_with_combinations: pd.DataFrame):
     original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh_with_combinations.columns else 'SEASON DESC'
-    mapping = pd.read_excel("Mapping.xlsx", sheet_name='Sheet1')
+    mapping = pd.read_excel("mapping.xlsx", sheet_name='Sheet1')
     
     damage_summary = soh_with_combinations[soh_with_combinations['location_catergory'] == 'Damage'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
     damage_summary['coverage'] = damage_summary['Total Provision'] / damage_summary['NETTOTAL_COST']
