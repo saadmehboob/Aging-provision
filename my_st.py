@@ -57,9 +57,24 @@ with tab1:
     """)
 
     soh_file = st.file_uploader("Upload SOH File", type=["xlsx"], key="soh")
-    combinations_file = st.file_uploader("Upload Combinations File", type=["xlsx"], key="combinations",)
-    mapping_file = st.file_uploader("Upload Mapping File", type=["xlsx"], key="mapping")
     
+    skip_upload = st.checkbox("🔁 Skip mapping & combination upload and use default files")
+
+    if skip_upload:
+        mapping_file = "mapping.xlsx"
+        combinations_file = "combinations.xlsx"
+
+        with open("mapping.xlsx", "rb") as f:
+            st.download_button("⬇️ Download Mapping File", f, file_name="mapping.xlsx")
+
+        with open("combinations.xlsx", "rb") as f:
+            st.download_button("⬇️ Download Combinations File", f, file_name="combinations.xlsx")
+
+    else:
+        combinations_file = st.file_uploader("Upload Combinations File", type=["xlsx"], key="combinations")
+        mapping_file = st.file_uploader("Upload Mapping File", type=["xlsx"], key="mapping")
+
+
     unique_brands = []  
 
     if soh_file:
@@ -145,7 +160,8 @@ with tab1:
 
 
 with tab2:
-    if ("soh_comb" in st.session_state) and ('mapping' in st.session_state):
+    #st.write("Debug - keys in session_state:", list(st.session_state.keys()))
+    if ("soh_comb" in st.session_state) and ('mapping_data' in st.session_state):
         analysis = get_analysis(st.session_state["soh_comb"],st.session_state["mapping_data"])
 
         def render_summary_with_metrics(title, df):
