@@ -19,7 +19,7 @@ with tab1:
     """)
 
     soh_file = st.file_uploader("Upload SOH File", type=["xlsx"], key="soh")
-    unique_brands = []
+    unique_brands = []  
 
     if soh_file:
         try:
@@ -30,14 +30,18 @@ with tab1:
             st.warning(f"Could not read brand list from combinations: {e}")
 
     with st.sidebar:
-        first_first_bucket_number_seasons = st.number_input("# of Seasons in Bucket 1", min_value=1, max_value=10, value=5)
+        
+        st.subheader("⚙️ Provision Parameters")
         damage_percentage = st.slider("Damage Provision %", 0.0, 1.0, 1.0)
         leftover_running_percentage = st.slider("Leftover - Running Brand %", 0.0, 1.0, 0.15)
         leftover_closed_percentage = st.slider("Leftover - Closed Brand %", 0.0, 1.0, 0.50)
         closed_percentage = st.slider("Closed Brand (Other) %", 0.0, 1.0, 0.50)
         st.markdown("---")
+        st.subheader("⚙️ Bucket Parameters")
+        first_first_bucket_number_seasons = st.number_input("Number of Seasons in Bucket 1", min_value=1, max_value=10, value=5)
         unknown_season_in_bucket1 = st.checkbox("Include Unknown Season in Bucket 1", value=True)
         st.markdown("---")
+        
         st.subheader("🔧 Brand-Specific Provision Override")
         if unique_brands:
             selected_brands = st.multiselect("Select brands to override", options=unique_brands)
@@ -128,7 +132,7 @@ with tab2:
         render_summary_with_metrics("Unknown Season Summary", analysis["no_seasons"])
 
         
-        col1, col2= st.columns([1, 1])
+        col1, col2, col3= st.columns([1, 1,1])
         with col1:
             st.subheader("Bucket-to-Season Mapping")
             st.dataframe(analysis["check_buckets"].reset_index(drop=True))
@@ -136,16 +140,17 @@ with tab2:
         with col2:
             st.subheader("Original vs Standard Season")
             st.dataframe(analysis["check_season"].reset_index(drop=True))
-
+        with col3:
+            st.subheader("Brands not in the working file")
+            st.dataframe(pd.DataFrame(analysis["missing_std_brands_in_soh"]))
 
         st.subheader("")
-        st.metric("Missing brand in Standard Brand", f"{analysis['missing_in_std_brand']:,.2f}")
+        st.metric("Total SOH cost with missing standard Brand", f"{analysis['missing_in_std_brand']:,.2f}")
 
         st.subheader("")
         st.metric("Duplicates in mapping file",value=f"{analysis["duplicates_mapping"]:,.2f}")
 
-        st.subheader("Brands not in the working file")
-        st.dataframe(pd.DataFrame(analysis["missing_std_brands_in_soh"]))
+
 
 
         st.subheader("")
