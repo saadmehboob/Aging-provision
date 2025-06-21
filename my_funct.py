@@ -54,7 +54,8 @@ def run_aging_provision_pipeline(
 
     soh = pd.read_excel(soh_path)
     soh = soh[(soh['GROUP_NAME'] != 'Aleph') & (soh['AR Comments'] == 'Consider')]
-    
+    print("Current working directory:", os.getcwd())
+    print("Files in current directory:", os.listdir("."))
     mapping = pd.read_excel('mapping.xlsx', sheet_name='Sheet1')
     combinations = combinations = pd.read_excel('combinations.xlsx', sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
 
