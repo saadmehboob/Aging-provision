@@ -3,6 +3,15 @@ import pandas as pd
 from my_funct import run_aging_provision_pipeline, get_GL_entry, get_analysis
 import io
 import os
+#from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load environment variables from .env
+except Exception as e:
+    pass
+
+
 
 st.set_page_config(page_title="Inventory Aging Provision Dashboard", layout="wide")
 
@@ -10,11 +19,33 @@ st.set_page_config(page_title="Inventory Aging Provision Dashboard", layout="wid
 st.title("📦 Inventory Aging Provision Dashboard")
 PASSWORD = os.getenv("APP_PASSWORD")
 
-if st.text_input("🔐 Enter password:", type="password") != PASSWORD:
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+def check_password():
+    if st.session_state["password_input"] == PASSWORD:
+        st.session_state["authenticated"] = True
+    else:
+        st.session_state["authenticated"] = False
+        st.session_state["password_error"] = True
+
+# Show login if not authenticated
+if not st.session_state["authenticated"]:
+    st.title("🔐 Login Required")
+
+    # Input field and bind to session_state
+    st.text_input("Enter password:", type="password", key="password_input", on_change=check_password)
+
+    # Optional: show error on bad attempt
+    if st.session_state.get("password_error"):
+        st.error("❌ Incorrect password")
     st.stop()
+
+# 🔓 Logged in — app continues here
+st.success("✅ Logged in successfully!")
+
 os.makedirs("Output", exist_ok=True)
 brand_specific_provision = {}
-DEFAULT_COMBINATIONS_PATH = "Mapping & Combinations/combinations.xlsx"
 
 tab1, tab2, tab3 = st.tabs(["🧾 Provision Summary", "📊 Analysis", "📄 GL Entries"])
 
@@ -26,11 +57,14 @@ with tab1:
     """)
 
     soh_file = st.file_uploader("Upload SOH File", type=["xlsx"], key="soh")
+    combinations_file = st.file_uploader("Upload Combinations File", type=["xlsx"], key="combinations",)
+    mapping_file = st.file_uploader("Upload Mapping File", type=["xlsx"], key="mapping")
+    
     unique_brands = []  
 
     if soh_file:
         try:
-            df_preview = pd.read_excel('combinations.xlsx', nrows=55)
+            df_preview = pd.read_excel('mapping.xlsx', nrows=55)
             if 'Std Brand' in df_preview.columns:
                 unique_brands = sorted(df_preview['Std Brand'].dropna().unique().astype(str).tolist())
         except Exception as e:
@@ -53,16 +87,18 @@ with tab1:
         if unique_brands:
             selected_brands = st.multiselect("Select brands to override", options=unique_brands)
             for brand in selected_brands:
-                override_val = st.slider(f"{brand} Provision %", min_value=0.0, max_value=5.0, step=0.05, value=0.5)
+                override_val = st.slider(f"{brand} Provision %", min_value=0.0, max_value=1.0, step=0.05, value=0.5)
                 brand_specific_provision[brand] = override_val
-               
+            
         else:
             st.caption("Upload SOH file to enable brand override.")
         
-    if soh_file:
+    if soh_file and combinations_file and mapping_file:
         with st.spinner("Running provision logic. Please wait..."):
             results = run_aging_provision_pipeline(
                 soh_path=soh_file,
+                mapping=mapping_file,
+                combinations=combinations_file,
                 first_first_bucket_number_seasons=first_first_bucket_number_seasons,
                 damage_percentage=damage_percentage,
                 leftover_running_percentage=leftover_running_percentage,
@@ -72,6 +108,7 @@ with tab1:
                 unknown_season_in_bucket1=unknown_season_in_bucket1
             )
             st.session_state["soh_comb"] = results["soh_comb"]
+            st.session_state["mapping_data"] = results["mapping"]
 
         st.success("Provisioning complete!")
 
@@ -93,23 +130,23 @@ with tab1:
         total_provision = results["summary"]["Total Provision"].sum()
         avg_coverage = (results["summary"]["coverage"].mean()) * 100
         col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Total Net SOH Cost", f"{total_cost:,.2f}")
-        col2.metric("Provision as per Policy", f"{provision_amount_policy:,.2f}")
-        col3.metric("Additional provision", f"{additional_provision:,.2f}")
-        col4.metric("Total Provision", f"{total_provision:,.2f}")
+        col1.metric("Total Net SOH Cost", f"{total_cost:,.0f}")
+        col2.metric("Provision as per Policy", f"{provision_amount_policy:,.0f}")
+        col3.metric("Additional provision", f"{additional_provision:,.0f}")
+        col4.metric("Total Provision", f"{total_provision:,.0f}")
         col5.metric("Avg Coverage %", f"{avg_coverage:.2f}%")
 
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             results["soh_comb"].to_excel(writer, index=False)
         st.download_button("Download Combinations Output", data=buffer.getvalue(),
-                           file_name="aging_provision_combinations.xlsx")
+                        file_name="aging_provision_combinations.xlsx")
 
 
 
 with tab2:
-    if "soh_comb" in st.session_state:
-        analysis = get_analysis(st.session_state["soh_comb"])
+    if ("soh_comb" in st.session_state) and ('mapping' in st.session_state):
+        analysis = get_analysis(st.session_state["soh_comb"],st.session_state["mapping_data"])
 
         def render_summary_with_metrics(title, df):
             st.subheader(title)
@@ -152,10 +189,10 @@ with tab2:
             st.dataframe(pd.DataFrame(analysis["missing_std_brands_in_soh"]))
 
         st.subheader("")
-        st.metric("Total SOH cost with missing standard Brand", f"{analysis['missing_in_std_brand']:,.2f}")
+        st.metric("Total SOH cost with missing standard Brand", f"{analysis['missing_in_std_brand']:,.0f}")
 
         st.subheader("")
-        st.metric("Duplicates in mapping file",value=f"{analysis['duplicates_mapping']:,.2f}")
+        st.metric("Duplicates in mapping file",value=f"{analysis['duplicates_mapping']:,.0f}")
 
 
 
@@ -184,12 +221,12 @@ with tab3:
         st.subheader("GL Entry Completed")
         #st.dataframe(completed_entry)
         st.download_button("Download Completed Entry", data=completed_entry.to_csv(index=False).encode(),
-                           file_name="completed_entry.csv")
+                        file_name="completed_entry.csv")
 
         st.subheader("GL Entry: Diff (Reconciliation)")
         #st.dataframe(diff_entry)
         st.download_button("Download Diff Entry", data=diff_entry.to_csv(index=False).encode(),
-                           file_name="diff_entry.csv")
+                        file_name="diff_entry.csv")
         
     elif "soh_comb" not in st.session_state:
         st.warning("Run the provision logic in Tab 1 first.")

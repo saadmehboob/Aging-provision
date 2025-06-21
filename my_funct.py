@@ -5,13 +5,15 @@ import re
 
 def run_aging_provision_pipeline(
     soh_path,
+    mapping,
+    combinations,
     first_first_bucket_number_seasons=5,
     damage_percentage=1.0,
     leftover_running_percentage=0.15,
     leftover_closed_percentage=0.5,
     closed_percentage=0.5,
     brand_specific_provision=None,
-    unknown_season_in_bucket1=True,
+    unknown_season_in_bucket1=True
 ):
     brand_specific_provision = brand_specific_provision or {}
     pd.options.display.float_format = '{:,.2f}'.format
@@ -53,11 +55,13 @@ def run_aging_provision_pipeline(
         return "Unknown"
 
     soh = pd.read_excel(soh_path)
+    mapping = pd.read_excel(mapping)
+    combinations = pd.read_excel(combinations).groupby(['LOCATION', 'Std Brand']).first().reset_index()
     soh = soh[(soh['GROUP_NAME'] != 'Aleph') & (soh['AR Comments'] == 'Consider')]
     print("Current working directory:", os.getcwd())
     print("Files in current directory:", os.listdir("."))
-    mapping = pd.read_excel('mapping.xlsx', sheet_name='Sheet1')
-    combinations = combinations = pd.read_excel('combinations.xlsx', sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
+    #mapping = pd.read_excel('mapping.xlsx', sheet_name='Sheet1')
+    #combinations = combinations = pd.read_excel('combinations.xlsx', sheet_name='Sheet1').groupby(['LOCATION', 'Std Brand']).first().reset_index()
 
     soh['NETTOTAL_COST'].fillna(0, inplace=True)
     soh['NETTOTAL_COST'] = pd.to_numeric(soh['NETTOTAL_COST'], errors='coerce')
@@ -115,6 +119,9 @@ def run_aging_provision_pipeline(
     soh.loc[condition, 'additional_provision'] = (
         soh["NETTOTAL_COST"] * closed_percentage - soh['provision_amount_policy'])
 
+    soh.loc[soh['Model'].isin(['Consignment', 'Guaranteed Margin', 'Buying Pull - Mango']),
+            ['provision_amount_policy', 'provision_%_policy', 'Continuity_factor', 'additional_provision']] = 0
+
     if brand_specific_provision:
         soh['additional_provision'] = np.where(
             soh['Std Brand'].isin(brand_specific_provision.keys()),
@@ -122,17 +129,16 @@ def run_aging_provision_pipeline(
             soh['additional_provision']
         )
 
-    soh.loc[soh['Model'].isin(['Consignment', 'Guaranteed Margin', 'Buying Pull - Mango']),
-            ['provision_amount_policy', 'provision_%_policy', 'Continuity_factor', 'additional_provision']] = 0
+
 
     soh['provision_amount_policy'] = soh['provision_amount_policy'].fillna(0)
     soh['additional_provision'] = soh['additional_provision'].fillna(0)
     soh['Total Provision'] = soh['provision_amount_policy'] + soh['additional_provision']
-    soh.to_csv(os.path.join("Output", "aging_provision.csv"), index=False)
+    #soh.to_csv(os.path.join("Output", "aging_provision.csv"), index=False)
 
     # Generate analysis and checks
     soh_comb = soh.merge(combinations, on=['Std Brand', 'LOCATION'], how='left').fillna(0)
-    soh_comb.to_excel(os.path.join("Output", "aging_provision_combinations.xlsx"), index=False)
+    #soh_comb.to_excel(os.path.join("Output", "aging_provision_combinations.xlsx"), index=False)
 
     summary = soh_comb.groupby(by='Std Brand')[["NETTOTAL_COST", 'provision_amount_policy',
                                                  'additional_provision', 'Total Provision']].sum()
@@ -144,6 +150,7 @@ def run_aging_provision_pipeline(
 
         "summary": summary,
         "soh_comb": soh_comb,
+        "mapping": mapping,
     }
 
 def get_GL_entry(soh_with_combinations: pd.DataFrame, 
@@ -159,7 +166,7 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
     completed_entry.rename(columns={'Total Provision': 'Dr/(CR)'}, inplace=True)
     completed_entry = completed_entry[completed_entry['Dr/(CR)'] != 0]
     completed_entry = completed_entry[['s1', 's2', 's3', 's4', 's5','Dr/(CR)']]
-    completed_entry.to_csv(os.path.join("Output","completed_entry.csv"), index=False)
+    #completed_entry.to_csv(os.path.join("Output","completed_entry.csv"), index=False)
 
     diff_table = soh_with_combinations.groupby(["s1","s2","s3","s4"])['Total Provision'].sum().reset_index().fillna(0).merge(existing_balances, on=['s1','s2','s3','s4'], how='outer').fillna(0)
     diff_table['Dr/(CR)'] = (diff_table['Total Provision'] + diff_table['Closing balance'])*-1
@@ -172,13 +179,14 @@ def get_GL_entry(soh_with_combinations: pd.DataFrame,
     #diff_entry.rename(columns={'Total Provision': 'Dr/(CR)'}, inplace=True)
     diff_entry = diff_entry[diff_entry['Dr/(CR)'] != 0]
     diff_entry = diff_entry[['s1', 's2', 's3', 's4', 's5','Dr/(CR)']]
-    diff_entry.to_csv(os.path.join("Output","diff_entry.csv"), index=False)
+    #diff_entry.to_csv(os.path.join("Output","diff_entry.csv"), index=False)
 
     return completed_entry, diff_entry, existing_balances
 
-def get_analysis(soh_with_combinations: pd.DataFrame):
+def get_analysis(soh_with_combinations: pd.DataFrame,mapping: pd.DataFrame):
+    #mapping = pd.read_excel(mapping)
     original_season = 'SEASON_DESC' if 'SEASON_DESC' in soh_with_combinations.columns else 'SEASON DESC'
-    mapping = pd.read_excel("mapping.xlsx", sheet_name='Sheet1')
+    #mapping = pd.read_excel("mapping.xlsx", sheet_name='Sheet1')
     
     damage_summary = soh_with_combinations[soh_with_combinations['location_catergory'] == 'Damage'].groupby('Std Brand')[['NETTOTAL_COST', 'Total Provision']].sum()
     damage_summary['coverage'] = damage_summary['Total Provision'] / damage_summary['NETTOTAL_COST']
